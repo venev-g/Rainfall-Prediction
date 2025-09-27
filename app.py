@@ -162,9 +162,11 @@ def main():
                 st.rerun()
         
         # Debug information (moved here to access map_data)
-        if st.checkbox("Show Debug Info", help="Display map interaction details"):
+        if st.checkbox("Show Debug Info", key="debug_checkbox", help="Display map interaction details"):
             st.write("**Map Click Data:**", map_data.get('last_clicked', 'No clicks detected'))
             st.write("**Map Object Data:**", map_data.get('last_object_clicked', 'No object clicks'))
+            if st.session_state.coordinates:
+                st.write("**Current Coordinates:**", st.session_state.coordinates)
     
     with col2:
         st.subheader("📍 Location Details")
@@ -198,6 +200,10 @@ def main():
             st.write(f"**Latitude:** {st.session_state.coordinates['latitude']:.6f}")
             st.write(f"**Longitude:** {st.session_state.coordinates['longitude']:.6f}")
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Test webhook connectivity button
+            if st.button("🔍 Test Webhook Connection", use_container_width=True):
+                test_webhook_connection()
             
             # Confirm selection button
             if st.button("🎯 Confirm Location & Get Weather", type="primary", use_container_width=True):
@@ -253,6 +259,12 @@ def get_weather_data(coordinates):
             'Content-Type': 'application/json'
         }
         
+        # Debug: Show what we're sending
+        st.info("🔍 **Debug - Sending to API:**")
+        st.code(f"URL: {api_url}")
+        st.code(f"Payload: {json.dumps(payload, indent=2)}")
+        st.code(f"Headers: {json.dumps(headers, indent=2)}")
+        
         # Make the POST request
         response = requests.post(
             api_url, 
@@ -260,6 +272,13 @@ def get_weather_data(coordinates):
             headers=headers,
             timeout=30
         )
+        
+        # Debug: Show response details
+        st.info("📡 **Debug - API Response:**")
+        st.code(f"Status Code: {response.status_code}")
+        st.code(f"Response Headers: {dict(response.headers)}")
+        response_preview = response.text[:500] + "..." if len(response.text) > 500 else response.text
+        st.code(f"Response Text: {response_preview}")
         
         # Check if request was successful
         if response.status_code == 200:
@@ -296,6 +315,50 @@ def get_weather_data(coordinates):
         st.error(f"❌ Unexpected Error: {str(e)}")
         return None
 
+def test_webhook_connection():
+    """
+    Test if the webhook endpoint is reachable
+    """
+    try:
+        api_url = "http://localhost:5678/webhook/rainfall"
+        
+        # Simple test payload
+        test_payload = [
+            {
+                "body": {
+                    "latitude": 19.0760,
+                    "longitude": 72.8777
+                }
+            }
+        ]
+        
+        headers = {'Content-Type': 'application/json'}
+        
+        st.info("🔍 Testing webhook connection...")
+        
+        # Test connection with short timeout
+        response = requests.post(
+            api_url, 
+            json=test_payload, 
+            headers=headers,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            st.success(f"✅ Webhook is reachable! Status: {response.status_code}")
+            st.code(f"Response preview: {response.text[:200]}...")
+        else:
+            st.warning(f"⚠️ Webhook responded with status: {response.status_code}")
+            st.code(f"Response: {response.text}")
+            
+    except requests.exceptions.ConnectionError:
+        st.error("🔌 Connection Error: Cannot reach webhook at localhost:5678")
+        st.info("💡 Make sure your n8n workflow is running on port 5678")
+    except requests.exceptions.Timeout:
+        st.error("⏱️ Timeout: Webhook is taking too long to respond")
+    except Exception as e:
+        st.error(f"❌ Test failed: {str(e)}")
+
 # Sidebar information
 def sidebar_info():
     st.sidebar.title("ℹ️ About")
@@ -319,8 +382,17 @@ def sidebar_info():
     st.sidebar.write("""
     1. Click anywhere on the map
     2. Verify the coordinates
-    3. Click 'Confirm Location'
-    4. View the weather report
+    3. Test webhook connection
+    4. Click 'Confirm Location'
+    5. View the weather report
+    """)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🐛 Debugging")
+    st.sidebar.write("""
+    • Use 'Test Webhook Connection' to verify API availability
+    • Enable 'Show Debug Info' to see request/response details
+    • Check that n8n is running on port 5678
     """)
 
 if __name__ == "__main__":
