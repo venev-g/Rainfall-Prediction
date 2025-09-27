@@ -376,7 +376,7 @@ def get_weather_data(coordinates):
     """
     try:
         # API endpoint
-        api_url = "http://localhost:5678/webhook/rainfall"
+        api_url = "https://91960391b615.ngrok-free.app/webhook/rainfall"
         
         # Prepare the payload according to the example format
         payload = [
