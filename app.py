@@ -454,7 +454,7 @@ def test_webhook_connection():
     Test if the webhook endpoint is reachable
     """
     try:
-        api_url = "http://localhost:5678/webhook/rainfall"
+        api_url = "https://91960391b615.ngrok-free.app/webhook/rainfall"
         
         # Simple test payload
         test_payload = [
