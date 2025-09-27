@@ -47,13 +47,6 @@ st.markdown("""
         margin: 20px 0;
     }
     
-    .map-container {
-        border: 2px solid #2E86AB;
-        border-radius: 10px;
-        padding: 10px;
-        margin: 10px 0;
-    }
-    
     .prediction-container {
         background-color: #f8f9fa;
         border: 2px solid #28a745;
@@ -99,7 +92,6 @@ def main():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown('<div class="map-container">', unsafe_allow_html=True)
         st.subheader("🗺️ Interactive Map")
         st.info("🔍 Click on any location on the map to select coordinates for weather prediction")
         
@@ -155,7 +147,6 @@ def main():
             key="weather_map",
             returned_objects=["last_clicked", "last_object_clicked", "bounds", "zoom"]
         )
-        st.markdown('</div>', unsafe_allow_html=True)
         
         # Handle map clicks - Improved logic with multiple detection methods
         clicked_location = None
@@ -265,7 +256,7 @@ def main():
         st.markdown(st.session_state.weather_response, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Rainfall prediction section
+    # Always show rainfall prediction section
     st.markdown("---")
     st.subheader("🌧️ Rainfall Prediction using XGBoost")
     
