@@ -3,6 +3,9 @@ import folium
 from streamlit_folium import st_folium
 import requests
 import json
+import pickle
+import pandas as pd
+import numpy as np
 
 # Page configuration
 st.set_page_config(
@@ -49,6 +52,32 @@ st.markdown("""
         border-radius: 10px;
         padding: 10px;
         margin: 10px 0;
+    }
+    
+    .prediction-container {
+        background-color: #f8f9fa;
+        border: 2px solid #28a745;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+    }
+    
+    .rain-prediction {
+        background: linear-gradient(45deg, #4CAF50, #45a049);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .no-rain-prediction {
+        background: linear-gradient(45deg, #2196F3, #1976D2);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -235,6 +264,120 @@ def main():
         st.markdown('<div class="weather-response">', unsafe_allow_html=True)
         st.markdown(st.session_state.weather_response, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Rainfall prediction section
+    st.markdown("---")
+    st.subheader("🌧️ Rainfall Prediction using XGBoost")
+    
+    with st.expander("📊 Weather Parameter Input for Prediction", expanded=True):
+        st.info("Enter weather parameters to predict if it will rain tomorrow")
+        
+        # Create input columns
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            humidity_3pm = st.slider(
+                "Humidity at 3PM (%)", 
+                min_value=0, max_value=100, value=70, 
+                help="Relative humidity percentage at 3 PM"
+            )
+            
+            wind_gust_speed = st.slider(
+                "Wind Gust Speed (km/h)", 
+                min_value=0, max_value=100, value=25, 
+                help="Maximum wind gust speed"
+            )
+            
+            pressure_3pm = st.slider(
+                "Atmospheric Pressure at 3PM (hPa)", 
+                min_value=980, max_value=1040, value=1013, 
+                help="Atmospheric pressure at 3 PM"
+            )
+        
+        with col2:
+            humidity_9am = st.slider(
+                "Humidity at 9AM (%)", 
+                min_value=0, max_value=100, value=65, 
+                help="Relative humidity percentage at 9 AM"
+            )
+            
+            wind_dir_3pm = st.selectbox(
+                "Wind Direction at 3PM",
+                options=list(range(16)),  # 0-15 for encoded directions
+                index=8,
+                help="Wind direction at 3 PM (encoded: 0-15)"
+            )
+        
+        # Prediction button
+        if st.button("🔮 Predict Rainfall Tomorrow", type="primary", use_container_width=True):
+            prediction_result = predict_rainfall(
+                humidity_3pm, wind_gust_speed, pressure_3pm, humidity_9am, wind_dir_3pm
+            )
+            
+            if prediction_result is not None:
+                probability, prediction = prediction_result
+                
+                # Display prediction results
+                st.markdown("### 📈 Prediction Results")
+                
+                if prediction == 1:
+                    st.success(f"🌧️ **Rain Expected Tomorrow!** (Confidence: {probability:.1%})")
+                    st.balloons()
+                else:
+                    st.info(f"☀️ **No Rain Expected Tomorrow** (Confidence: {(1-probability):.1%})")
+                
+                # Display probability bar
+                st.markdown("#### Probability Breakdown:")
+                col_no_rain, col_rain = st.columns(2)
+                
+                with col_no_rain:
+                    st.metric("No Rain", f"{(1-probability):.1%}")
+                with col_rain:
+                    st.metric("Rain", f"{probability:.1%}")
+                
+                # Visual probability bar
+                st.progress(float(probability))
+                
+                # Feature importance display
+                with st.expander("📊 Input Parameters Summary", expanded=False):
+                    params_df = pd.DataFrame({
+                        'Parameter': ['Humidity 3PM', 'Wind Gust Speed', 'Pressure 3PM', 'Humidity 9AM', 'Wind Direction 3PM'],
+                        'Value': [f"{humidity_3pm}%", f"{wind_gust_speed} km/h", f"{pressure_3pm} hPa", f"{humidity_9am}%", f"Direction {wind_dir_3pm}"]
+                    })
+                    st.dataframe(params_df, use_container_width=True)
+            else:
+                st.error("❌ Failed to load the prediction model. Please check if XGB_classifier.pkl exists.")
+
+def predict_rainfall(humidity_3pm, wind_gust_speed, pressure_3pm, humidity_9am, wind_dir_3pm):
+    """
+    Predict rainfall using the trained XGBoost model
+    """
+    try:
+        # Load the trained model
+        with open('XGB_classifier.pkl', 'rb') as f:
+            model = pickle.load(f)
+        
+        # Create input dataframe with the exact feature names expected by the model
+        input_data = pd.DataFrame({
+            'Humidity3pm': [humidity_3pm],
+            'WindGustSpeed': [wind_gust_speed], 
+            'Pressure3pm': [pressure_3pm],
+            'Humidity9am': [humidity_9am],
+            'WindDir3pm': [wind_dir_3pm]
+        })
+        
+        # Make prediction
+        prediction = int(model.predict(input_data)[0])  # Convert to Python int
+        probability = float(model.predict_proba(input_data)[0][1])  # Convert to Python float
+        
+        return probability, prediction
+        
+    except FileNotFoundError:
+        st.error("🚫 Model file 'XGB_classifier.pkl' not found. Please ensure the model is trained and saved.")
+        return None
+    except Exception as e:
+        st.error(f"🚫 Error during prediction: {str(e)}")
+        return None
 
 def get_weather_data(coordinates):
     """
@@ -371,6 +514,8 @@ def sidebar_info():
     - 🌦️ Get detailed weather information
     - 📊 View 5-day weather forecasts
     - 💡 Receive weather-based recommendations
+    - 🔮 Predict rainfall using ML model
+    - 📈 XGBoost-based forecasting
     """)
     
     st.sidebar.markdown("---")
@@ -388,7 +533,16 @@ def sidebar_info():
     """)
     
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🐛 Debugging")
+    st.sidebar.subheader("� ML Prediction")
+    st.sidebar.write("""
+    • Enter weather parameters for rainfall prediction
+    • Uses trained XGBoost model
+    • 5 key features: Humidity (9AM & 3PM), Wind Speed, Pressure, Wind Direction
+    • Predicts probability of rain tomorrow
+    """)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("�🐛 Debugging")
     st.sidebar.write("""
     • Use 'Test Webhook Connection' to verify API availability
     • Enable 'Show Debug Info' to see request/response details
